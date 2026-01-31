@@ -1,53 +1,40 @@
 import express from "express";
-import fetch from "node-fetch";
+import cors from "cors";
+import bodyParser from "body-parser";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
-app.use(express.json());
+app.use(cors());
+app.use(bodyParser.json());
 
-const PORT = process.env.PORT || 3000;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
-  res.send("AI Chat Backend is running");
+  res.send("AI backend running");
 });
 
 app.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const userMessage = req.body.message;
 
-    if (!message) {
+    if (!userMessage) {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: message }]
-            }
-          ]
-        })
-      }
-    );
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const data = await response.json();
+    const result = await model.generateContent(userMessage);
+    const response = result.response;
+    const text = response.text();
 
-    const reply =
-      data?.candidates?.[0]?.content?.parts
-        ?.map(p => p.text)
-        ?.join("") || "No reply generated";
-
-    res.json({ reply });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    res.json({ reply: text });
+  } catch (error) {
+    console.error("Gemini error:", error);
+    res.status(500).json({ error: "Gemini failed" });
   }
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
